@@ -1,104 +1,240 @@
-<a href="https://demo-nextjs-with-supabase.vercel.app/">
-  <img alt="Next.js and Supabase Starter Kit - the fastest way to build apps with Next.js and Supabase" src="https://demo-nextjs-with-supabase.vercel.app/opengraph-image.png">
-  <h1 align="center">Next.js and Supabase Starter Kit</h1>
-</a>
+# 学生个人档案应用
 
-<p align="center">
- The fastest way to build apps with Next.js and Supabase
-</p>
+## 应用功能概述
 
-<p align="center">
-  <a href="#features"><strong>Features</strong></a> ·
-  <a href="#demo"><strong>Demo</strong></a> ·
-  <a href="#deploy-to-vercel"><strong>Deploy to Vercel</strong></a> ·
-  <a href="#clone-and-run-locally"><strong>Clone and run locally</strong></a> ·
-  <a href="#feedback-and-issues"><strong>Feedback and issues</strong></a>
-  <a href="#more-supabase-examples"><strong>More Examples</strong></a>
-</p>
-<br/>
+这是一个基于Next.js和TypeScript开发的学生个人档案应用，用于帮助教师统计和评估学生的学习情况。应用使用Supabase进行用户认证与授权，并通过客户端存储(localStorage)保存评估数据。
 
-## Features
+### 主要功能
 
-- Works across the entire [Next.js](https://nextjs.org) stack
-  - App Router
-  - Pages Router
-  - Middleware
-  - Client
-  - Server
-  - It just works!
-- supabase-ssr. A package to configure Supabase Auth to use cookies
-- Styling with [Tailwind CSS](https://tailwindcss.com)
-- Components with [shadcn/ui](https://ui.shadcn.com/)
-- Optional deployment with [Supabase Vercel Integration and Vercel deploy](#deploy-your-own)
-  - Environment variables automatically assigned to Vercel project
+1. **用户认证**
+   - 用户注册与登录
+   - 安全身份验证
+   - 受保护的学生档案页面
 
-## Demo
+2. **学生管理**
+   - 添加新学生档案
+   - 查看学生列表
+   - 删除学生记录
+   - 搜索学生功能
 
-You can view a fully working demo at [demo-nextjs-with-supabase.vercel.app](https://demo-nextjs-with-supabase.vercel.app/).
+3. **评估管理**
+   - 创建新的评估记录
+   - 查看历史评估记录
+   - 修改现有评估
+   - 按照维度和子部分进行评分
 
-## Deploy to Vercel
+4. **数据可视化**
+   - 雷达图展示四大维度能力
+   - 进度条显示各维度得分
+   - 评估预览实时显示
+   - 未评估指标列表显示
 
-Vercel deployment will guide you through creating a Supabase account and project.
+5. **教练反馈**
+   - 记录学生优势
+   - 记录需要改进的地方
+   - 设定下一步计划
 
-After installation of the Supabase integration, all relevant environment variables will be assigned to the project so the deployment is fully functioning.
+## 用户界面
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&project-name=nextjs-with-supabase&repository-name=nextjs-with-supabase&demo-title=nextjs-with-supabase&demo-description=This+starter+configures+Supabase+Auth+to+use+cookies%2C+making+the+user%27s+session+available+throughout+the+entire+Next.js+app+-+Client+Components%2C+Server+Components%2C+Route+Handlers%2C+Server+Actions+and+Middleware.&demo-url=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2F&external-id=https%3A%2F%2Fgithub.com%2Fvercel%2Fnext.js%2Ftree%2Fcanary%2Fexamples%2Fwith-supabase&demo-image=https%3A%2F%2Fdemo-nextjs-with-supabase.vercel.app%2Fopengraph-image.png)
+### 主页
 
-The above will also clone the Starter kit to your GitHub, you can clone that locally and develop locally.
+应用提供了一个美观的主页，展示应用的主要功能和使用场景：
 
-If you wish to just develop locally and not deploy to Vercel, [follow the steps below](#clone-and-run-locally).
+- 吸引人的Hero section，简要介绍应用功能
+- 主要特性展示区域
+- 用户登录和浏览示例入口
 
-## Clone and run locally
+### 认证界面
 
-1. You'll first need a Supabase project which can be made [via the Supabase dashboard](https://database.new)
+- 用户友好的登录和注册表单
+- 美观的UI设计和动效
+- 表单验证和错误提示
 
-2. Create a Next.js app using the Supabase Starter template npx command
+### 受保护页面
 
-   ```bash
-   npx create-next-app --example with-supabase with-supabase-app
-   ```
+登录后可访问的受保护页面包括：
+- 用户信息显示
+- 学生档案应用入口
+- 数据仪表盘入口
 
-   ```bash
-   yarn create next-app --example with-supabase with-supabase-app
-   ```
+## 页面布局
 
-   ```bash
-   pnpm create next-app --example with-supabase with-supabase-app
-   ```
+应用使用三栏布局设计，提供更直观的工作流程：
 
-3. Use `cd` to change into the app's directory
+1. **左侧栏** - 学生目录
+   - 显示所有学生列表
+   - 当前选中学生高亮显示
+   - 可折叠侧边栏，提供更大工作区域
 
-   ```bash
-   cd with-supabase-app
-   ```
+2. **中间栏** - 评估内容
+   - 显示评估表单
+   - 教练反馈内容
+   - 各维度评分项
 
-4. Rename `.env.example` to `.env.local` and update the following:
+3. **右侧栏** - 数据可视化
+   - 学习能力综合评估
+   - 四维学习力雷达图
+   - 学习能力进步趋势图表
+   - 未评估指标列表
 
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
-   ```
+此布局设计提高了应用的易用性和工作效率，让教师能更直观地完成评估工作。
 
-   Both `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` can be found in [your Supabase project's API settings](https://app.supabase.com/project/_/settings/api)
+## 评估打分逻辑
 
-5. You can now run the Next.js local development server:
+应用采用详细指标直接评分，系统自动计算大维度评分的方式：
 
-   ```bash
-   npm run dev
-   ```
+1. **评分范围**
+   - 普通指标：1-5分制
+   - 百分比指标：20%-100%（内部会转换为1-5分制）
 
-   The starter kit should now be running on [localhost:3000](http://localhost:3000/).
+2. **计算逻辑**
+   - 详细指标评分 → 自动计算子部分平均分 → 自动计算维度平均分 → 计算总体评分
+   - 支持跳过某些指标，不计入平均分
+   - 如果某个部分完全没有评分，则显示为0分
 
-6. This template comes with the default shadcn/ui style initialized. If you instead want other ui.shadcn styles, delete `components.json` and [re-install shadcn/ui](https://ui.shadcn.com/docs/installation/next)
+3. **评估流程**
+   - 可以按顺序完成所有评估项目
+   - 支持"下一项"、"上一项"导航
+   - 可以随时保存或更新评估
+   - 可以取消选择某个指标，使其不参与平均分计算
 
-> Check out [the docs for Local Development](https://supabase.com/docs/guides/getting-started/local-development) to also run Supabase locally.
+## 评估维度与指标
 
-## Feedback and issues
+应用评估学生在四个主要维度的表现：
 
-Please file feedback and issues over on the [Supabase GitHub org](https://github.com/supabase/supabase/issues/new/choose).
+### 1. 学习能力
+- **题目掌握度**
+  - 1⭐题正确率
+  - 2⭐题正确率
+  - 3⭐题正确率
+  - 4⭐题正确率
+  - 1⭐相似题正确率
+  - 2⭐相似题正确率
+  - 3⭐相似题正确率
+  - 4⭐相似题正确率
 
-## More Supabase examples
+- **错题自学能力**
+  - 自学理解比例
+  - 能向教练清晰讲解比例
+  - 遇到困难主动寻求解决的积极性
 
-- [Next.js Subscription Payments Starter](https://github.com/vercel/nextjs-subscription-payments)
-- [Cookie-based Auth and the Next.js 13 App Router (free course)](https://youtube.com/playlist?list=PL5S4mPUpp4OtMhpnp93EFSo42iQ40XjbF)
-- [Supabase Auth and the Next.js App Router](https://github.com/supabase/supabase/tree/master/examples/auth/nextjs)
+- **思维能力**
+  - 解题思路结构化能力
+  - 自我卡点定位能力
+  - 知识点联系与迁移能力
+
+- **学习元能力**
+  - 问题精确描述能力
+  - AI工具有效利用能力
+  - 自我反思总结能力
+
+### 2. 时间利用效率
+- **做题效率**
+  - 1⭐题平均完成时间效率
+  - 2⭐题平均完成时间效率
+  - 3⭐题平均完成时间效率
+  - 4⭐题平均完成时间效率
+
+- **错题攻克效率**
+  - 错题自学理解速度
+  - 番茄钟利用效率
+
+- **注意力管理**
+  - 专注持续时间
+  - 学习过程中干扰应对能力
+  - 目标明确度
+
+### 3. 学习习惯
+- **主动学习习惯**
+  - 主动提问解决问题习惯
+  - 使用双格笔记法记录知识点和困惑的习惯
+  - 课前预习/课后复习习惯
+
+- **工具使用习惯**
+  - AI工具有效提问习惯
+  - 合理运用番茄钟习惯
+  - 错题收集整理习惯
+
+- **学习系统性**
+  - 知识整合与复习习惯
+  - 考点关联意识习惯
+  - 自我检验习惯
+
+### 4. 配合执行力
+- **任务执行**
+  - 任务完成度
+  - 任务质量
+  - 任务主动性
+
+- **教练互动**
+  - 主动沟通频率
+  - 反馈接受度
+  - 指导落实度
+
+- **心态管理**
+  - 面对挑战积极性
+  - 挫折应对能力
+  - 学习动力持续性
+
+## 最新更新
+
+### 2024年5月更新
+1. **添加认证功能**
+   - 整合Supabase身份验证系统
+   - 添加用户注册和登录功能
+   - 实现受保护路由，未登录用户无法访问
+   - 优化登录和注册界面，采用现代UI设计
+
+2. **界面改进**
+   - 添加吸引人的主页Hero section
+   - 优化登录和注册页面布局居中显示
+   - 改进表单设计和交互体验
+   - 添加数据仪表盘入口
+
+3. **评估系统优化**
+   - 改进评分按钮，使用1-5分按钮式评分
+   - 支持点击已选中的按钮取消选择
+   - 添加未评估指标列表显示
+   - 未评估的指标（值为0）不参与平均分计算
+
+### 2024年更新
+1. **优化页面布局**
+   - 实现三栏布局设计：左侧学生目录、中间评估表单、右侧数据可视化
+   - 添加可折叠侧边栏功能，点击按钮可收起/展开
+   - 修改整体界面风格，更符合教育应用设计规范
+
+2. **代码结构优化**
+   - 重构代码，采用组件化设计
+   - 创建AssessmentForm和StudentVisualizations组件
+   - 提高代码可维护性和可扩展性
+
+3. **用户体验改进**
+   - 优化导航和交互体验
+   - 增强数据可视化部分
+   - 改进表单填写流程
+
+### 2023年更新
+1. **修复了评估系统问题**
+   - 现在可以点击所有评估section的按钮
+   - 添加了完整的评估表单，支持所有指标评分
+   - 支持按顺序评估，可以使用"下一项"、"上一项"和"跳过此项"按钮导航
+   - 支持某些指标不评分，不计入总成绩计算
+
+2. **添加了评估修改功能**
+   - 可以修改已有的评估记录
+   - 保存修改后会自动更新localStorage中的数据
+
+3. **修复了数据显示问题**
+   - 确保localStorage中的学生数据正确加载和显示
+   - 优化了计算分数的方法，能够处理未评分的指标
+
+## 技术栈
+
+- **前端框架**: Next.js 14+ (React), TypeScript
+- **认证服务**: Supabase Authentication
+- **样式**: Tailwind CSS
+- **数据可视化**: Recharts
+- **状态管理**: React Hooks (useState, useEffect)
+- **路由**: Next.js App Router
+- **本地存储**: localStorage
+- **UI组件**: 自定义组件库
