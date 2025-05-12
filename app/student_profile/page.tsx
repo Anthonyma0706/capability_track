@@ -6,24 +6,41 @@ import { getStudentsFromStorage, saveStudentsToStorage, generateId, createEmptyA
 import StudentList from './components/StudentList';
 import AssessmentForm from './components/AssessmentForm';
 import StudentVisualizations from './components/StudentVisualizations';
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
-export default function StudentProfilePage() {
+// 客户端组件，用于避免服务器端渲染时的Supabase错误
+const StudentProfileContent = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [isCreatingAssessment, setIsCreatingAssessment] = useState<boolean>(false);
   const [realtimeAssessment, setRealtimeAssessment] = useState<Assessment | null>(null);
   const [isEditingSidebar, setIsEditingSidebar] = useState<boolean>(true);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isExampleMode, setIsExampleMode] = useState<boolean>(false);
   const router = useRouter();
-  const supabase = createClient();
-
-  // 检查用户是否已登录
+  
+  // 仅在客户端导入和使用Supabase
   useEffect(() => {
     async function checkAuth() {
+      // 检查URL中是否包含example参数
+      const urlParams = new URLSearchParams(window.location.search);
+      const isExample = urlParams.get('example') === 'true';
+      
+      if (isExample) {
+        setIsExampleMode(true);
+        setIsCheckingAuth(false);
+        return;
+      }
+      
+      // 仅在客户端导入Supabase
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      
+      // 如果不是示例模式，则检查是否已登录
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        // 未登录则重定向到登录页面
         router.push('/sign-in');
       } else {
         setIsCheckingAuth(false);
@@ -31,7 +48,7 @@ export default function StudentProfilePage() {
     }
     
     checkAuth();
-  }, [router, supabase.auth]);
+  }, [router]);
 
   // 如果正在检查认证状态，显示加载状态
   if (isCheckingAuth) {
@@ -41,7 +58,7 @@ export default function StudentProfilePage() {
       </div>
     );
   }
-
+  
   // 选择学生的回调
   const handleSelectStudent = (student: Student) => {
     setSelectedStudent(student);
@@ -117,6 +134,25 @@ export default function StudentProfilePage() {
             <h1 className="text-2xl font-bold">学生个人档案应用</h1>
           </div>
           <div className="flex space-x-3">
+            {isExampleMode ? (
+              <div className="px-3 py-2 bg-yellow-500 text-white rounded-md flex items-center text-sm">
+                <svg 
+                  className="w-5 h-5 mr-1" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" 
+                  />
+                </svg>
+                示例模式
+              </div>
+            ) : null}
             <button
               onClick={toggleSidebar}
               className="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-md flex items-center text-sm transition"
@@ -157,6 +193,28 @@ export default function StudentProfilePage() {
                   />
                 </svg>
                 创建新评估
+              </button>
+            )}
+            {isExampleMode && (
+              <button
+                onClick={() => router.push('/sign-in')}
+                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-md flex items-center text-sm transition"
+              >
+                <svg 
+                  className="w-5 h-5 mr-1" 
+                  fill="none" 
+                  stroke="currentColor" 
+                  viewBox="0 0 24 24" 
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path 
+                    strokeLinecap="round" 
+                    strokeLinejoin="round" 
+                    strokeWidth={2} 
+                    d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" 
+                  />
+                </svg>
+                登录系统
               </button>
             )}
           </div>
@@ -349,4 +407,9 @@ export default function StudentProfilePage() {
       </div>
     </div>
   );
+};
+
+// 使用动态导入避免服务器端渲染
+export default function StudentProfilePage() {
+  return <StudentProfileContent />;
 } 
