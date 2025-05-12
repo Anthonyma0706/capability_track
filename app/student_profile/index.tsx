@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
+import StudentProfilePage from './page';
 
 export default function StudentProfileIndex() {
-  redirect('/student_profile');
+  return <StudentProfilePage />;
 } 
