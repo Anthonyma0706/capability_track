@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Student, Assessment, DimensionKey, SubDimensionKey } from '../types';
 import { 
   getStudentsFromStorage, 
@@ -9,6 +9,20 @@ import {
   getDimensionName, 
   getSubDimensionName 
 } from '../utils';
+
+// 添加自定义动画
+const styles = `
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(-10px); }
+  10% { opacity: 1; transform: translateY(0); }
+  90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+.animate-fade-in-out {
+  animation: fadeInOut 3s ease-in-out;
+}
+`;
 
 interface AssessmentFormProps {
   student: Student;
@@ -27,14 +41,31 @@ export default function AssessmentForm({
     return existingAssessment || createEmptyAssessment(student.id);
   });
   
-  const [currentDimension, setCurrentDimension] = useState<DimensionKey>('learningAbility');
-  const [currentSubDimension, setCurrentSubDimension] = useState<SubDimensionKey>('problemMastery');
+  // 用于跟踪上一次发送的评估数据，避免无限循环
+  const prevAssessmentRef = useRef<Assessment | null>(null);
+  
   const [notEvaluatedKeys, setNotEvaluatedKeys] = useState<string[]>([]);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [assessmentDate, setAssessmentDate] = useState<string>(() => {
+    // 如果是编辑现有评估，使用其日期；否则使用今天的日期
+    if (existingAssessment) {
+      return new Date(existingAssessment.date).toISOString().split('T')[0];
+    } else {
+      return new Date().toISOString().split('T')[0];
+    }
+  });
   
   // 重置表单
   useEffect(() => {
     const newAssessment = existingAssessment || createEmptyAssessment(student.id);
     setAssessment(newAssessment);
+    
+    // 设置日期
+    if (existingAssessment) {
+      setAssessmentDate(new Date(existingAssessment.date).toISOString().split('T')[0]);
+    } else {
+      setAssessmentDate(new Date().toISOString().split('T')[0]);
+    }
     
     // 初始化未评估指标列表
     const notEvaluated: string[] = [];
@@ -54,9 +85,20 @@ export default function AssessmentForm({
   // 当评估数据变化时，触发回调
   useEffect(() => {
     if (onAssessmentChange) {
-      onAssessmentChange(assessment);
+      // 创建更新后的评估对象
+      const updatedAssessment = {
+        ...assessment,
+        date: new Date(assessmentDate).toISOString()
+      };
+      
+      // 使用 ref 来跟踪上一次发送的评估数据
+      if (!prevAssessmentRef.current || 
+          JSON.stringify(prevAssessmentRef.current) !== JSON.stringify(updatedAssessment)) {
+        prevAssessmentRef.current = updatedAssessment;
+        onAssessmentChange(updatedAssessment);
+      }
     }
-  }, [assessment, onAssessmentChange]);
+  }, [assessment, assessmentDate, onAssessmentChange]);
 
   // 保存评估
   const handleSaveAssessment = () => {
@@ -67,6 +109,12 @@ export default function AssessmentForm({
     
     const updatedStudent = { ...students[studentIndex] };
     
+    // 更新评估日期
+    const updatedAssessment = {
+      ...assessment,
+      date: new Date(assessmentDate).toISOString()
+    };
+    
     if (existingAssessment) {
       // 更新现有评估
       const assessmentIndex = updatedStudent.assessments.findIndex(
@@ -74,16 +122,30 @@ export default function AssessmentForm({
       );
       
       if (assessmentIndex !== -1) {
-        updatedStudent.assessments[assessmentIndex] = assessment;
+        updatedStudent.assessments[assessmentIndex] = updatedAssessment;
       }
     } else {
       // 添加新评估
-      updatedStudent.assessments.push(assessment);
+      updatedStudent.assessments.push(updatedAssessment);
     }
     
     students[studentIndex] = updatedStudent;
     saveStudentsToStorage(students);
-    onAssessmentSaved(student, assessment);
+    
+    // 显示保存成功提示
+    setShowSaveSuccess(true);
+    
+    // 3秒后隐藏提示
+    setTimeout(() => {
+      setShowSaveSuccess(false);
+    }, 3000);
+    
+    onAssessmentSaved(student, updatedAssessment);
+  };
+
+  // 处理日期变更
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAssessmentDate(e.target.value);
   };
 
   // 更新评分
@@ -130,70 +192,6 @@ export default function AssessmentForm({
         [field]: value
       }
     }));
-  };
-
-  // 导航到下一个子维度
-  const navigateToNextSubDimension = () => {
-    const dimensions: DimensionKey[] = ['learningAbility', 'timeEfficiency', 'learningHabits', 'executionAbility'];
-    const subDimensions: Record<DimensionKey, SubDimensionKey[]> = {
-      learningAbility: ['problemMastery', 'selfLearning', 'thinkingAbility', 'metaLearning'],
-      timeEfficiency: ['problemSolvingEfficiency', 'mistakeOvercomingEfficiency', 'attentionManagement'],
-      learningHabits: ['proactiveHabits', 'toolUseHabits', 'systematicLearning'],
-      executionAbility: ['taskExecution', 'coachInteraction', 'mentalityManagement']
-    };
-    
-    const currentDimensionIndex = dimensions.indexOf(currentDimension);
-    const currentSubDimensions = subDimensions[currentDimension];
-    const currentSubDimensionIndex = currentSubDimensions.indexOf(currentSubDimension);
-    
-    if (currentSubDimensionIndex < currentSubDimensions.length - 1) {
-      // 移动到当前维度的下一个子维度
-      setCurrentSubDimension(currentSubDimensions[currentSubDimensionIndex + 1]);
-    } else if (currentDimensionIndex < dimensions.length - 1) {
-      // 移动到下一个维度的第一个子维度
-      const nextDimension = dimensions[currentDimensionIndex + 1];
-      setCurrentDimension(nextDimension);
-      setCurrentSubDimension(subDimensions[nextDimension][0]);
-    }
-  };
-
-  // 导航到上一个子维度
-  const navigateToPrevSubDimension = () => {
-    const dimensions: DimensionKey[] = ['learningAbility', 'timeEfficiency', 'learningHabits', 'executionAbility'];
-    const subDimensions: Record<DimensionKey, SubDimensionKey[]> = {
-      learningAbility: ['problemMastery', 'selfLearning', 'thinkingAbility', 'metaLearning'],
-      timeEfficiency: ['problemSolvingEfficiency', 'mistakeOvercomingEfficiency', 'attentionManagement'],
-      learningHabits: ['proactiveHabits', 'toolUseHabits', 'systematicLearning'],
-      executionAbility: ['taskExecution', 'coachInteraction', 'mentalityManagement']
-    };
-    
-    const currentDimensionIndex = dimensions.indexOf(currentDimension);
-    const currentSubDimensions = subDimensions[currentDimension];
-    const currentSubDimensionIndex = currentSubDimensions.indexOf(currentSubDimension);
-    
-    if (currentSubDimensionIndex > 0) {
-      // 移动到当前维度的上一个子维度
-      setCurrentSubDimension(currentSubDimensions[currentSubDimensionIndex - 1]);
-    } else if (currentDimensionIndex > 0) {
-      // 移动到上一个维度的最后一个子维度
-      const prevDimension = dimensions[currentDimensionIndex - 1];
-      setCurrentDimension(prevDimension);
-      setCurrentSubDimension(subDimensions[prevDimension][subDimensions[prevDimension].length - 1]);
-    }
-  };
-
-  // 根据维度和子维度获取当前的评分项
-  const getCurrentIndicators = (): Record<string, number> => {
-    // 使用类型断言确保访问是安全的
-    const subDimensionData = (assessment.scores[currentDimension] as any)[currentSubDimension];
-    const indicators: Record<string, number> = {};
-    
-    // 获取当前子维度下的所有指标
-    for (const indicator in subDimensionData) {
-      indicators[indicator] = subDimensionData[indicator];
-    }
-    
-    return indicators;
   };
 
   // 获取指标的中文显示名称
@@ -273,35 +271,6 @@ export default function AssessmentForm({
     return displayNames[indicator] || indicator;
   };
 
-  // 显示当前的评估进度
-  const getAssessmentProgress = (): string => {
-    const dimensions: DimensionKey[] = ['learningAbility', 'timeEfficiency', 'learningHabits', 'executionAbility'];
-    const subDimensions: Record<DimensionKey, SubDimensionKey[]> = {
-      learningAbility: ['problemMastery', 'selfLearning', 'thinkingAbility', 'metaLearning'],
-      timeEfficiency: ['problemSolvingEfficiency', 'mistakeOvercomingEfficiency', 'attentionManagement'],
-      learningHabits: ['proactiveHabits', 'toolUseHabits', 'systematicLearning'],
-      executionAbility: ['taskExecution', 'coachInteraction', 'mentalityManagement']
-    };
-    
-    let totalSubDimensions = 0;
-    let currentPosition = 0;
-    
-    for (let i = 0; i < dimensions.length; i++) {
-      const dimension = dimensions[i];
-      const dimensionSubDimensions = subDimensions[dimension];
-      totalSubDimensions += dimensionSubDimensions.length;
-      
-      if (dimension === currentDimension) {
-        currentPosition += subDimensions[dimension].indexOf(currentSubDimension) + 1;
-        break;
-      } else {
-        currentPosition += dimensionSubDimensions.length;
-      }
-    }
-    
-    return `${currentPosition}/${totalSubDimensions}`;
-  };
-
   // 获取当前维度的背景色
   const getDimensionColor = (dimension: DimensionKey): string => {
     const colorMap: Record<DimensionKey, string> = {
@@ -313,8 +282,6 @@ export default function AssessmentForm({
     return colorMap[dimension];
   };
 
-  const indicators = getCurrentIndicators();
-
   // 渲染星级评分按钮组
   const renderRatingButtons = (value: number, onChange: (value: number) => void) => {
     return (
@@ -324,15 +291,28 @@ export default function AssessmentForm({
             key={star}
             type="button"
             onClick={() => onChange(star)}
-            className={`w-10 h-10 rounded-full focus:outline-none transition-all ${
-              star === value 
+            className={`w-10 h-10 rounded-full focus:outline-none transition-all duration-200 flex items-center justify-center
+              ${star === value 
                 ? 'bg-yellow-400 text-white shadow-md transform scale-110' 
-                : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-            }`}
+                : 'bg-gray-200 text-gray-600 hover:bg-gray-300 hover:transform hover:scale-105'
+              }`}
+            title={`评分: ${star}分`}
           >
-            {star}
+            <span className="font-medium">{star}</span>
           </button>
         ))}
+        {value > 0 && (
+          <button
+            type="button"
+            onClick={() => onChange(0)}
+            className="ml-2 text-xs text-gray-500 hover:text-red-500 transition-colors"
+            title="清除评分"
+          >
+            <svg className="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
     );
   };
@@ -351,9 +331,64 @@ export default function AssessmentForm({
     
     return notEvaluated;
   };
+  
+  // 获取所有子维度数据
+  const getAllSubDimensions = () => {
+    const dimensions: DimensionKey[] = ['learningAbility', 'timeEfficiency', 'learningHabits', 'executionAbility'];
+    const subDimensions: Record<DimensionKey, SubDimensionKey[]> = {
+      learningAbility: ['problemMastery', 'selfLearning', 'thinkingAbility', 'metaLearning'],
+      timeEfficiency: ['problemSolvingEfficiency', 'mistakeOvercomingEfficiency', 'attentionManagement'],
+      learningHabits: ['proactiveHabits', 'toolUseHabits', 'systematicLearning'],
+      executionAbility: ['taskExecution', 'coachInteraction', 'mentalityManagement']
+    };
+    
+    return { dimensions, subDimensions };
+  };
+
+  // 获取特定子维度的指标
+  const getIndicatorsForSubDimension = (dimension: DimensionKey, subDimension: SubDimensionKey): Record<string, number> => {
+    // 使用类型断言确保访问是安全的
+    const subDimensionData = (assessment.scores[dimension] as any)[subDimension];
+    const indicators: Record<string, number> = {};
+    
+    // 获取当前子维度下的所有指标
+    for (const indicator in subDimensionData) {
+      indicators[indicator] = subDimensionData[indicator];
+    }
+    
+    return indicators;
+  };
+
+  const { dimensions, subDimensions } = getAllSubDimensions();
 
   return (
     <div className="h-full flex flex-col p-6 overflow-y-auto bg-white">
+      {/* 添加自定义样式 */}
+      <style dangerouslySetInnerHTML={{ __html: styles }} />
+      
+      {/* 保存成功提示 */}
+      {showSaveSuccess && (
+        <div className="fixed top-6 right-6 z-50 bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded-lg shadow-lg animate-fade-in-out flex items-center">
+          <div className="bg-green-100 rounded-full p-2 mr-3">
+            <svg className="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+          <div>
+            <p className="font-medium">评估已保存成功!</p>
+            <p className="text-sm text-green-600">学生档案已更新</p>
+          </div>
+          <button 
+            onClick={() => setShowSaveSuccess(false)} 
+            className="ml-6 text-green-500 hover:text-green-700"
+          >
+            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      )}
+      
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-2xl font-bold">
@@ -362,70 +397,27 @@ export default function AssessmentForm({
           <p className="text-gray-600 mt-1">{student.name} - {student.grade}</p>
         </div>
         
-        {/* 评估进度 */}
-        <div className="bg-blue-100 px-4 py-2 rounded-full">
-          <div className="flex items-center">
-            <span className="text-blue-800 font-medium">评估进度:</span>
-            <div className="ml-2 text-blue-800 font-bold">{getAssessmentProgress()}</div>
-          </div>
-        </div>
+        <button
+          onClick={handleSaveAssessment}
+          className="px-5 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center transition"
+        >
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+          </svg>
+          保存评估
+        </button>
       </div>
       
-      {/* 维度导航标签 */}
-      <div className="flex mb-6 border-b border-gray-200 overflow-x-auto">
-        {(['learningAbility', 'timeEfficiency', 'learningHabits', 'executionAbility'] as DimensionKey[]).map((dimension) => (
-          <button
-            key={dimension}
-            className={`px-4 py-2 font-medium whitespace-nowrap ${
-              currentDimension === dimension 
-                ? 'text-blue-600 border-b-2 border-blue-600' 
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-            onClick={() => {
-              setCurrentDimension(dimension);
-              const subDimensions: Record<DimensionKey, SubDimensionKey[]> = {
-                learningAbility: ['problemMastery', 'selfLearning', 'thinkingAbility', 'metaLearning'],
-                timeEfficiency: ['problemSolvingEfficiency', 'mistakeOvercomingEfficiency', 'attentionManagement'],
-                learningHabits: ['proactiveHabits', 'toolUseHabits', 'systematicLearning'],
-                executionAbility: ['taskExecution', 'coachInteraction', 'mentalityManagement']
-              };
-              setCurrentSubDimension(subDimensions[dimension][0]);
-            }}
-          >
-            {getDimensionName(dimension)}
-          </button>
-        ))}
-      </div>
-      
-      {/* 子维度和指标评分 */}
-      <div className={`mb-6 rounded-lg border-l-4 p-6 ${getDimensionColor(currentDimension)}`}>
-        <h3 className="text-xl font-semibold mb-4">
-          {getSubDimensionName(currentSubDimension)}
-        </h3>
-        
-        <div className="space-y-6">
-          {Object.entries(indicators).map(([indicator, value]) => (
-            <div key={indicator} className="bg-white p-4 rounded-md shadow-sm">
-              <div className="flex justify-between mb-3">
-                <label className="block font-medium">
-                  {getIndicatorDisplayName(indicator)}
-                </label>
-                {value === 0 && (
-                  <span className="text-gray-500 text-sm">未评估</span>
-                )}
-              </div>
-              
-              {renderRatingButtons(value, (newValue) => 
-                handleScoreChange(
-                  currentDimension,
-                  currentSubDimension,
-                  indicator,
-                  newValue
-                )
-              )}
-            </div>
-          ))}
-        </div>
+      {/* 日期选择器 */}
+      <div className="mb-6 bg-blue-50 p-4 rounded-lg border border-blue-200">
+        <label className="block text-sm font-medium text-gray-700 mb-2">评估日期</label>
+        <input
+          type="date"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          value={assessmentDate}
+          onChange={handleDateChange}
+          max={new Date().toISOString().split('T')[0]} // 限制最大日期为今天
+        />
       </div>
       
       {/* 未评估指标列表 */}
@@ -444,72 +436,96 @@ export default function AssessmentForm({
         </div>
       )}
       
-      {/* 导航按钮 */}
-      <div className="flex justify-between mb-6">
-        <button
-          onClick={navigateToPrevSubDimension}
-          className="flex items-center px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-md transition"
-        >
-          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path>
-          </svg>
-          上一项
-        </button>
-        <button
-          onClick={navigateToNextSubDimension}
-          className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition"
-        >
-          下一项
-          <svg className="w-5 h-5 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7"></path>
-          </svg>
-        </button>
-      </div>
+      {/* 所有维度的评估指标 */}
+      {dimensions.map(dimension => (
+        <div key={dimension} className="mb-10">
+          <h2 className="text-xl font-bold mb-4 pb-2 border-b border-gray-200">
+            {getDimensionName(dimension)}
+          </h2>
+          
+          {subDimensions[dimension].map(subDimension => {
+            const indicators = getIndicatorsForSubDimension(dimension, subDimension);
+            
+            return (
+              <div 
+                key={`${dimension}-${subDimension}`} 
+                className={`mb-6 rounded-lg border-l-4 p-6 ${getDimensionColor(dimension)}`}
+              >
+                <h3 className="text-xl font-semibold mb-4">
+                  {getSubDimensionName(subDimension)}
+                </h3>
+                
+                <div className="space-y-6">
+                  {Object.entries(indicators).map(([indicator, value]) => (
+                    <div key={indicator} className="bg-white p-4 rounded-md shadow-sm">
+                      <div className="flex justify-between mb-3">
+                        <label className="block font-medium">
+                          {getIndicatorDisplayName(indicator)}
+                        </label>
+                        {value === 0 && (
+                          <span className="text-gray-500 text-sm">未评估</span>
+                        )}
+                      </div>
+                      
+                      {renderRatingButtons(value, (newValue) => 
+                        handleScoreChange(
+                          dimension,
+                          subDimension,
+                          indicator,
+                          newValue
+                        )
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
       
       {/* 教练反馈 */}
-      {currentDimension === 'executionAbility' && currentSubDimension === 'mentalityManagement' && (
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold mb-4">教练反馈</h3>
-          
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-4">
-            <label className="block mb-2 font-medium text-gray-700">学生优势</label>
-            <textarea
-              className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={assessment.feedback.strengths}
-              onChange={(e) => handleFeedbackChange('strengths', e.target.value)}
-              placeholder="学生的优势和突出能力..."
-            />
-          </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-4">
-            <label className="block mb-2 font-medium text-gray-700">需要改进的地方</label>
-            <textarea
-              className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={assessment.feedback.improvements}
-              onChange={(e) => handleFeedbackChange('improvements', e.target.value)}
-              placeholder="需要改进的地方..."
-            />
-          </div>
-          
-          <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-            <label className="block mb-2 font-medium text-gray-700">下一步计划</label>
-            <textarea
-              className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              value={assessment.feedback.nextSteps}
-              onChange={(e) => handleFeedbackChange('nextSteps', e.target.value)}
-              placeholder="具体的改进计划..."
-            />
-          </div>
+      <div className="mb-24">
+        <h2 className="text-xl font-bold mb-4 pb-2 border-b border-gray-200">教练反馈</h2>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-4">
+          <label className="block mb-2 font-medium text-gray-700">学生优势</label>
+          <textarea
+            className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={assessment.feedback.strengths}
+            onChange={(e) => handleFeedbackChange('strengths', e.target.value)}
+            placeholder="学生的优势和突出能力..."
+          />
         </div>
-      )}
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-4">
+          <label className="block mb-2 font-medium text-gray-700">需要改进的地方</label>
+          <textarea
+            className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={assessment.feedback.improvements}
+            onChange={(e) => handleFeedbackChange('improvements', e.target.value)}
+            placeholder="需要改进的地方..."
+          />
+        </div>
+        
+        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+          <label className="block mb-2 font-medium text-gray-700">下一步计划</label>
+          <textarea
+            className="w-full px-4 py-3 border border-gray-300 rounded-md h-28 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            value={assessment.feedback.nextSteps}
+            onChange={(e) => handleFeedbackChange('nextSteps', e.target.value)}
+            placeholder="具体的改进计划..."
+          />
+        </div>
+      </div>
       
-      {/* 保存按钮 */}
-      <div className="mt-auto">
+      {/* 底部保存按钮 */}
+      <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 mt-6 flex justify-center shadow-md z-10">
         <button
           onClick={handleSaveAssessment}
-          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-md flex items-center justify-center text-lg font-medium transition"
+          className="px-8 py-3 bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5"
         >
-          <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
           </svg>
           保存评估

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Student, Assessment } from './types';
 import { getStudentsFromStorage, saveStudentsToStorage, generateId, createEmptyAssessment } from './utils';
 import StudentList from './components/StudentList';
 import AssessmentForm from './components/AssessmentForm';
 import StudentVisualizations from './components/StudentVisualizations';
+import Overview from './components/Overview';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 
@@ -18,31 +19,70 @@ const StudentProfileContent = () => {
   const [isEditingSidebar, setIsEditingSidebar] = useState<boolean>(true);
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [isExampleMode, setIsExampleMode] = useState<boolean>(false);
+  const [resizing, setResizing] = useState<boolean>(false);
+  const [splitPosition, setSplitPosition] = useState<number>(40); // 默认分割位置：40% 表单，60% 可视化
+  const [activeView, setActiveView] = useState<'overview' | 'assessment' | 'visualization'>('overview');
+  const splitPaneRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   
-  // 仅在客户端导入和使用Supabase
+  // 实时评估更新回调
+  const handleAssessmentChange = useCallback((updatedAssessment: Assessment) => {
+    setRealtimeAssessment(updatedAssessment);
+  }, []);
+  
+  // 处理拖动过程
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!resizing || !splitPaneRef.current) return;
+      
+      const containerRect = splitPaneRef.current.getBoundingClientRect();
+      const containerWidth = containerRect.width;
+      const mouseX = e.clientX - containerRect.left;
+      
+      // 计算鼠标位置相对于容器的百分比
+      let newPosition = (mouseX / containerWidth) * 100;
+      
+      // 限制拖动范围，确保两个面板都至少有20%的宽度
+      newPosition = Math.max(20, Math.min(newPosition, 80));
+      
+      setSplitPosition(newPosition);
+    };
+    
+    const handleMouseUp = () => {
+      setResizing(false);
+    };
+    
+    if (resizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizing]);
+  
+  // 检查用户认证状态
   useEffect(() => {
     async function checkAuth() {
-      // 检查URL中是否包含example参数
-      const urlParams = new URLSearchParams(window.location.search);
-      const isExample = urlParams.get('example') === 'true';
-      
-      if (isExample) {
-        setIsExampleMode(true);
+      try {
+        // 在按钮点击时检查认证，而不是页面加载时
         setIsCheckingAuth(false);
-        return;
-      }
-      
-      // 仅在客户端导入Supabase
-      const { createClient } = await import('@/utils/supabase/client');
-      const supabase = createClient();
-      
-      // 如果不是示例模式，则检查是否已登录
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        // 未登录则重定向到登录页面
-        router.push('/sign-in');
-      } else {
+        
+        // 示例模式
+        const exampleData = localStorage.getItem('example_mode');
+        if (exampleData === 'true') {
+          setIsExampleMode(true);
+          // 如果没有示例数据，创建一些
+          const students = getStudentsFromStorage();
+          if (students.length === 0) {
+            // 这里可以添加示例数据
+            console.log('可以添加一些示例数据');
+          }
+        }
+      } catch (error) {
+        console.error('Auth check error:', error);
         setIsCheckingAuth(false);
       }
     }
@@ -65,14 +105,52 @@ const StudentProfileContent = () => {
     setSelectedAssessment(null);
     setIsCreatingAssessment(false);
     setRealtimeAssessment(null);
+    setActiveView('overview'); // 默认显示总览页面
   };
 
   // 创建新评估的回调
   const handleCreateAssessment = () => {
     if (!selectedStudent) return;
+    
+    // 检查今天是否已经有评估
+    const today = new Date().toISOString().split('T')[0]; // 获取今天的日期 YYYY-MM-DD
+    const existingAssessmentToday = selectedStudent.assessments.find(assessment => {
+      const assessmentDate = new Date(assessment.date).toISOString().split('T')[0];
+      return assessmentDate === today;
+    });
+    
+    if (existingAssessmentToday) {
+      // 如果今天已有评估，导航到该评估
+      setSelectedAssessment(existingAssessmentToday);
+      setIsCreatingAssessment(false);
+      setActiveView('assessment');
+      
+      // 显示提示
+      alert(`今天 (${today}) 已经创建过评估，将为您打开已有评估进行修改。`);
+      return;
+    }
+    
+    // 如果今天没有评估，创建新评估
     setIsCreatingAssessment(true);
     setSelectedAssessment(null);
-    setRealtimeAssessment(null);
+    setActiveView('assessment');
+  };
+
+  // 选择特定评估的回调
+  const handleSelectAssessment = (studentId: string, assessmentId: string) => {
+    const students = getStudentsFromStorage();
+    const student = students.find(s => s.id === studentId);
+    
+    if (student) {
+      const assessment = student.assessments.find(a => a.id === assessmentId);
+      if (assessment) {
+        setSelectedStudent(student);
+        setSelectedAssessment(assessment);
+        setIsCreatingAssessment(false);
+        setRealtimeAssessment(null);
+        setActiveView('assessment');
+      }
+    }
   };
 
   // 保存评估回调
@@ -101,24 +179,25 @@ const StudentProfileContent = () => {
     }
   };
 
-  // 实时评估更新回调
-  const handleAssessmentChange = (updatedAssessment: Assessment) => {
-    setRealtimeAssessment(updatedAssessment);
-  };
-
   // 切换左侧栏的显示/隐藏
   const toggleSidebar = () => {
     setIsEditingSidebar(!isEditingSidebar);
+  };
+  
+  // 处理拖动开始
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setResizing(true);
   };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] bg-gray-100">
       {/* 顶部导航栏 */}
-      <header className="bg-blue-600 text-white p-4 shadow-md">
+      <header className="bg-gradient-to-r from-blue-700 to-blue-500 text-white p-4 shadow-md">
         <div className="flex items-center justify-between">
           <div className="flex items-center">
             <svg 
-              className="w-8 h-8 mr-3" 
+              className="w-8 h-8 mr-3 text-white opacity-90" 
               xmlns="http://www.w3.org/2000/svg" 
               fill="none" 
               viewBox="0 0 24 24" 
@@ -135,7 +214,7 @@ const StudentProfileContent = () => {
           </div>
           <div className="flex space-x-3">
             {isExampleMode ? (
-              <div className="px-3 py-2 bg-yellow-500 text-white rounded-md flex items-center text-sm">
+              <div className="px-3 py-2 bg-yellow-500 text-white rounded-md flex items-center text-sm shadow-sm">
                 <svg 
                   className="w-5 h-5 mr-1" 
                   fill="none" 
@@ -155,7 +234,7 @@ const StudentProfileContent = () => {
             ) : null}
             <button
               onClick={toggleSidebar}
-              className="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-md flex items-center text-sm transition"
+              className="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-md flex items-center text-sm transition duration-200 shadow-sm"
             >
               <svg 
                 className="w-5 h-5 mr-1" 
@@ -176,7 +255,7 @@ const StudentProfileContent = () => {
             {selectedStudent && (
               <button
                 onClick={handleCreateAssessment}
-                className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md flex items-center text-sm transition"
+                className="px-3 py-2 bg-green-600 hover:bg-green-700 rounded-md flex items-center text-sm transition duration-200 shadow-sm"
               >
                 <svg 
                   className="w-5 h-5 mr-1" 
@@ -198,7 +277,7 @@ const StudentProfileContent = () => {
             {isExampleMode && (
               <button
                 onClick={() => router.push('/sign-in')}
-                className="px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-md flex items-center text-sm transition"
+                className="px-3 py-2 bg-blue-700 hover:bg-blue-800 rounded-md flex items-center text-sm transition duration-200 shadow-sm"
               >
                 <svg 
                   className="w-5 h-5 mr-1" 
@@ -220,196 +299,123 @@ const StudentProfileContent = () => {
           </div>
         </div>
       </header>
-      
-      {/* 三栏布局主体 */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* 左侧栏：学生目录 */}
-        {isEditingSidebar && (
-          <div className="w-1/4 max-w-xs border-r border-gray-200 bg-white shadow-md flex-shrink-0 overflow-y-auto">
-            <StudentList
-              onSelectStudent={handleSelectStudent}
-              selectedStudentId={selectedStudent?.id || null}
-            />
-          </div>
-        )}
 
-        {/* 中间栏：评估内容 */}
-        <div className={`${isEditingSidebar ? 'w-2/5' : 'w-3/5'} overflow-y-auto`}>
-          {selectedStudent ? (
-            isCreatingAssessment ? (
-              <AssessmentForm
-                student={selectedStudent}
-                onAssessmentSaved={handleAssessmentSaved}
-                onAssessmentChange={handleAssessmentChange}
-              />
-            ) : selectedAssessment ? (
-              <AssessmentForm
-                student={selectedStudent}
-                existingAssessment={selectedAssessment}
-                onAssessmentSaved={handleAssessmentSaved}
-                onAssessmentChange={handleAssessmentChange}
-              />
-            ) : selectedStudent.assessments.length > 0 ? (
-              <div className="h-full flex flex-col p-6 bg-white">
-                <div className="flex justify-between items-center mb-6">
-                  <div>
-                    <h2 className="text-2xl font-bold">{selectedStudent.name} - 评估记录</h2>
-                    <p className="text-gray-600 mt-1">{selectedStudent.grade}</p>
-                  </div>
-                  <button
-                    onClick={handleCreateAssessment}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center"
-                  >
-                    <svg 
-                      className="w-5 h-5 mr-2" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24" 
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M12 4v16m8-8H4" 
-                      />
-                    </svg>
-                    创建新评估
-                  </button>
-                </div>
-                
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                  <div className="px-6 py-4 border-b">
-                    <h3 className="text-lg font-medium">历史评估记录</h3>
-                  </div>
-                  <ul className="divide-y divide-gray-200">
-                    {selectedStudent.assessments.map((assessment, index) => (
-                      <li 
-                        key={assessment.id}
-                        className="px-6 py-4 hover:bg-gray-50 cursor-pointer transition"
-                        onClick={() => setSelectedAssessment(assessment)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-lg font-medium text-blue-600">
-                              评估 #{selectedStudent.assessments.length - index}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {new Date(assessment.date).toLocaleDateString('zh-CN', {
-                                year: 'numeric',
-                                month: 'long',
-                                day: 'numeric'
-                              })}
-                            </p>
-                          </div>
-                          <svg 
-                            className="w-5 h-5 text-gray-400" 
-                            fill="none" 
-                            stroke="currentColor" 
-                            viewBox="0 0 24 24" 
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path 
-                              strokeLinecap="round" 
-                              strokeLinejoin="round" 
-                              strokeWidth={2} 
-                              d="M9 5l7 7-7 7" 
-                            />
-                          </svg>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-center bg-blue-50 p-8 rounded-lg max-w-md">
-                  <svg 
-                    className="w-16 h-16 mx-auto text-blue-500 mb-4" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24" 
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path 
-                      strokeLinecap="round" 
-                      strokeLinejoin="round" 
-                      strokeWidth={2} 
-                      d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" 
-                    />
-                  </svg>
-                  <p className="text-lg font-medium text-gray-800 mb-3">尚无评估记录</p>
-                  <p className="text-gray-600 mb-4">创建第一个评估来开始记录学生的学习情况</p>
-                  <button
-                    onClick={handleCreateAssessment}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-md font-medium transition"
-                  >
-                    创建第一个评估
-                  </button>
-                </div>
-              </div>
-            )
-          ) : (
-            <div className="h-full flex items-center justify-center p-6 bg-white">
-              <div className="text-center bg-blue-50 p-8 rounded-lg max-w-md">
-                <svg 
-                  className="w-16 h-16 mx-auto text-blue-500 mb-4" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24" 
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" 
-                  />
-                </svg>
-                <p className="text-lg font-medium text-gray-800 mb-3">请从左侧选择一个学生</p>
-                <p className="text-gray-600">或者添加一个新的学生档案</p>
-              </div>
-            </div>
+      {/* 主体内容 */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* 左侧学生列表 */}
+        <div 
+          className={`border-r border-gray-200 bg-white overflow-hidden transition-all duration-300 ease-in-out ${
+            isEditingSidebar ? 'w-80' : 'w-0'
+          }`}
+        >
+          {isEditingSidebar && (
+            <StudentList 
+              selectedStudentId={selectedStudent?.id || null} 
+              onSelectStudent={handleSelectStudent} 
+              onSelectAssessment={handleSelectAssessment}
+            />
           )}
         </div>
         
-        {/* 右侧栏：数据可视化 */}
-        <div className={`${isEditingSidebar ? 'w-2/5' : 'w-2/5'} overflow-y-auto`}>
+        {/* 中间内容区 */}
+        <div className="flex-1 overflow-hidden flex flex-col">
           {selectedStudent ? (
-            <StudentVisualizations
-              student={selectedStudent}
-              assessment={realtimeAssessment || selectedAssessment}
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center p-6 bg-white">
-              <div className="text-center bg-blue-50 p-8 rounded-lg max-w-md">
-                <svg 
-                  className="w-16 h-16 mx-auto text-blue-500 mb-4" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24" 
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" 
+            <>
+              {/* 视图切换导航 */}
+              {!isCreatingAssessment && !selectedAssessment && (
+                <div className="bg-white border-b border-gray-200 px-4">
+                  <nav className="flex space-x-4">
+                    <button
+                      onClick={() => setActiveView('overview')}
+                      className={`px-3 py-4 text-sm font-medium border-b-2 ${
+                        activeView === 'overview' 
+                          ? 'border-blue-500 text-blue-600' 
+                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      总览
+                    </button>
+                  </nav>
+                </div>
+              )}
+              
+              {/* 内容区域 */}
+              <div className="flex-1 overflow-auto">
+                {/* 总览视图 */}
+                {activeView === 'overview' && !isCreatingAssessment && !selectedAssessment && (
+                  <Overview 
+                    key={`overview-${selectedStudent.id}`}
+                    student={selectedStudent}
+                    onSelectAssessment={handleSelectAssessment}
+                    onCreateAssessment={handleCreateAssessment}
                   />
-                </svg>
-                <p className="text-lg font-medium text-gray-800 mb-3">无数据可视化</p>
-                <p className="text-gray-600">请先选择一个学生并创建评估</p>
+                )}
+                
+                {/* 评估表单和可视化 */}
+                {(isCreatingAssessment || selectedAssessment) && (
+                  <div ref={splitPaneRef} className="flex flex-1 overflow-hidden relative">
+                    {/* 评估表单区域 */}
+                    <div 
+                      className="h-full overflow-auto" 
+                      style={{ width: `${splitPosition}%` }}
+                    >
+                      <AssessmentForm 
+                        student={selectedStudent}
+                        existingAssessment={selectedAssessment}
+                        onAssessmentSaved={handleAssessmentSaved}
+                        onAssessmentChange={handleAssessmentChange}
+                      />
+                    </div>
+                    
+                    {/* 可拖动分隔线 */}
+                    <div 
+                      className={`w-1.5 h-full bg-gray-200 hover:bg-blue-500 cursor-col-resize active:bg-blue-600 transition-colors relative ${resizing ? 'bg-blue-600' : ''}`}
+                      onMouseDown={handleMouseDown}
+                      style={{ cursor: resizing ? 'col-resize' : 'default' }}
+                    >
+                      {/* 拖动指示器 */}
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-5 h-12 flex flex-col items-center justify-center">
+                        <div className="w-0.5 h-2 bg-gray-400 rounded-full mb-1"></div>
+                        <div className="w-0.5 h-2 bg-gray-400 rounded-full mb-1"></div>
+                        <div className="w-0.5 h-2 bg-gray-400 rounded-full"></div>
+                      </div>
+                    </div>
+                    
+                    {/* 数据可视化区域 */}
+                    <div 
+                      className="h-full overflow-auto" 
+                      style={{ width: `${100 - splitPosition}%` }}
+                    >
+                      <StudentVisualizations 
+                        student={selectedStudent} 
+                        assessment={selectedAssessment || realtimeAssessment}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <div className="text-center text-gray-500">
+                <p className="text-lg font-medium mb-2">请选择一名学生</p>
+                <p>从左侧学生列表中选择一名学生以查看其评估数据</p>
               </div>
             </div>
           )}
         </div>
       </div>
+      
+      {/* 拖动时的覆盖层，防止选中文本 */}
+      {resizing && (
+        <div className="fixed inset-0 bg-transparent cursor-col-resize z-50" />
+      )}
     </div>
   );
 };
 
-// 使用动态导入避免服务器端渲染
+// 顶级页面组件
 export default function StudentProfilePage() {
+  // 使用动态导入来避免服务端渲染issues
   return <StudentProfileContent />;
 } 

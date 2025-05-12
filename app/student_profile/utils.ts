@@ -53,19 +53,26 @@ export const calculateDimensionAverage = (
   dimension: any,
   skipZeros: boolean = true
 ): number => {
-  const subDimensions = Object.values(dimension);
-  
-  const subDimensionScores = subDimensions.map(subDim => {
-    if (typeof subDim === 'object') {
-      return calculateSubDimensionAverage(subDim as Record<string, number>, skipZeros);
+  // 如果是对象，计算所有子维度的平均值
+  if (typeof dimension === 'object' && dimension !== null) {
+    // 如果是子维度对象（包含具体指标）
+    if (Object.values(dimension).some(val => typeof val === 'number')) {
+      return calculateSubDimensionAverage(dimension as Record<string, number>, skipZeros);
     }
-    return 0;
-  });
+    
+    // 如果是维度对象（包含子维度）
+    const subDimensionScores = Object.values(dimension).map(subDim => {
+      return calculateDimensionAverage(subDim, skipZeros);
+    });
+    
+    const validScores = subDimensionScores.filter(score => !skipZeros || score > 0);
+    if (validScores.length === 0) return 0;
+    
+    return validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+  }
   
-  const validScores = subDimensionScores.filter(score => !skipZeros || score > 0);
-  if (validScores.length === 0) return 0;
-  
-  return validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+  // 如果不是对象，直接返回0
+  return 0;
 };
 
 // 计算总平均分
@@ -95,10 +102,10 @@ export const getDimensionRadarData = (
 // 获取维度的中文名称
 export const getDimensionName = (dimension: DimensionKey): string => {
   const nameMap: Record<DimensionKey, string> = {
-    learningAbility: '学习能力',
-    timeEfficiency: '时间利用效率',
-    learningHabits: '学习习惯',
-    executionAbility: '配合执行力'
+    learningAbility: '一、学习能力',
+    timeEfficiency: '二、时间利用效率',
+    learningHabits: '三、学习习惯',
+    executionAbility: '四、配合执行力'
   };
   return nameMap[dimension];
 };

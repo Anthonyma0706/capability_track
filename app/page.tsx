@@ -8,33 +8,30 @@ import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        // 动态导入Supabase客户端
-        const { createClient } = await import("@/utils/supabase/client");
-        const supabase = createClient();
-        
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        // 如果用户已登录，重定向到受保护页面
-        if (user) {
-          router.push("/protected");
-        } else {
-          setIsLoading(false);
-        }
-      } catch (error) {
-        console.error("认证检查失败:", error);
-        setIsLoading(false);
+  const checkAuth = async () => {
+    setIsLoading(true);
+    try {
+      // 动态导入Supabase客户端
+      const { createClient } = await import("@/utils/supabase/client");
+      const supabase = createClient();
+      
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // 如果用户已登录，重定向到受保护页面
+      if (user) {
+        router.push("/protected");
+      } else {
+        router.push("/sign-in");
       }
+    } catch (error) {
+      console.error("认证检查失败:", error);
+      setIsLoading(false);
     }
-    
-    checkAuth();
-  }, [router]);
+  };
   
   if (isLoading) {
     return (
@@ -60,10 +57,8 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-col gap-2 min-[400px]:flex-row">
-                <Button asChild size="lg">
-                  <Link href="/sign-in">
-                    立即开始
-                  </Link>
+                <Button onClick={checkAuth} size="lg">
+                  立即开始
                 </Button>
                 <Button asChild variant="outline" size="lg">
                   <Link href="/student_profile?example=true">

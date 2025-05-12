@@ -21,6 +21,13 @@ interface StudentVisualizationsProps {
 
 export default function StudentVisualizations({ student, assessment }: StudentVisualizationsProps) {
   const [notEvaluatedItems, setNotEvaluatedItems] = useState<Array<{name: string, path: string}>>([]);
+  const [historyData, setHistoryData] = useState<Array<{
+    date: string;
+    learningAbility: number;
+    timeEfficiency: number;
+    learningHabits: number;
+    executionAbility: number;
+  }>>([]);
   
   // 计算未评估指标
   useEffect(() => {
@@ -46,6 +53,39 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
     
     setNotEvaluatedItems(notEvaluated);
   }, [assessment]);
+  
+  // 获取历史评估数据
+  useEffect(() => {
+    if (!student || !assessment) return;
+    
+    // 获取所有评估并按日期排序（最新的在前）
+    const sortedAssessments = [...student.assessments].sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+    
+    // 最多取最近4次评估
+    const recentAssessments = sortedAssessments.slice(0, 4);
+    
+    // 生成趋势图数据（按日期从早到晚排序显示）
+    const trendData = recentAssessments.reverse().map(assessment => {
+      const dimensionScores = {
+        learningAbility: calculateDimensionAverage(assessment.scores.learningAbility),
+        timeEfficiency: calculateDimensionAverage(assessment.scores.timeEfficiency),
+        learningHabits: calculateDimensionAverage(assessment.scores.learningHabits),
+        executionAbility: calculateDimensionAverage(assessment.scores.executionAbility)
+      };
+      
+      return {
+        date: new Date(assessment.date).toLocaleDateString('zh-CN'),
+        learningAbility: Number(dimensionScores.learningAbility.toFixed(1)),
+        timeEfficiency: Number(dimensionScores.timeEfficiency.toFixed(1)),
+        learningHabits: Number(dimensionScores.learningHabits.toFixed(1)),
+        executionAbility: Number(dimensionScores.executionAbility.toFixed(1))
+      };
+    });
+    
+    setHistoryData(trendData);
+  }, [student, assessment]);
 
   if (!assessment) {
     return (
@@ -73,22 +113,22 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
   const radarData = [
     {
       subject: getDimensionName('learningAbility'),
-      A: dimensionScores.learningAbility,
+      A: Number(dimensionScores.learningAbility.toFixed(1)),
       fullMark: 5,
     },
     {
       subject: getDimensionName('timeEfficiency'),
-      A: dimensionScores.timeEfficiency,
+      A: Number(dimensionScores.timeEfficiency.toFixed(1)),
       fullMark: 5,
     },
     {
       subject: getDimensionName('learningHabits'),
-      A: dimensionScores.learningHabits,
+      A: Number(dimensionScores.learningHabits.toFixed(1)),
       fullMark: 5,
     },
     {
       subject: getDimensionName('executionAbility'),
-      A: dimensionScores.executionAbility,
+      A: Number(dimensionScores.executionAbility.toFixed(1)),
       fullMark: 5,
     },
   ];
@@ -97,34 +137,23 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
   const dimensionData = [
     {
       name: getDimensionName('learningAbility'),
-      value: dimensionScores.learningAbility,
+      value: Number(dimensionScores.learningAbility.toFixed(1)),
       fill: '#8884d8'
     },
     {
       name: getDimensionName('timeEfficiency'),
-      value: dimensionScores.timeEfficiency,
+      value: Number(dimensionScores.timeEfficiency.toFixed(1)),
       fill: '#82ca9d'
     },
     {
       name: getDimensionName('learningHabits'),
-      value: dimensionScores.learningHabits,
+      value: Number(dimensionScores.learningHabits.toFixed(1)),
       fill: '#ffc658'
     },
     {
       name: getDimensionName('executionAbility'),
-      value: dimensionScores.executionAbility,
+      value: Number(dimensionScores.executionAbility.toFixed(1)),
       fill: '#ff8042'
-    }
-  ];
-
-  // 历史评估数据（这里只展示当前评估，实际应用中可以添加历史记录）
-  const historyData = [
-    {
-      date: new Date(assessment.date).toLocaleDateString('zh-CN'),
-      learningAbility: dimensionScores.learningAbility,
-      timeEfficiency: dimensionScores.timeEfficiency,
-      learningHabits: dimensionScores.learningHabits,
-      executionAbility: dimensionScores.executionAbility
     }
   ];
 
@@ -136,8 +165,19 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
       <div className="mb-8">
         <h3 className="text-xl font-semibold mb-4">{sectionName}</h3>
         {Object.entries(dimensionData).map(([subDimensionKey, subDimensionData]) => {
-          // @ts-ignore - 类型处理
-          const subDimensionAvg = calculateDimensionAverage(subDimensionData);
+          // 计算子维度平均分（只计算已评估的指标）
+          let totalScore = 0;
+          let validCount = 0;
+          
+          Object.entries(subDimensionData as any).forEach(([_, value]) => {
+            const score = value as number;
+            if (score > 0) {
+              totalScore += score;
+              validCount++;
+            }
+          });
+          
+          const subDimensionAvg = validCount > 0 ? totalScore / validCount : 0;
           
           return (
             <div key={subDimensionKey} className="mb-4 bg-gray-50 p-4 rounded-lg">
@@ -158,39 +198,25 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
                     );
                   }
                   
-                  const isPercentage = indicatorKey.includes('Rate') || 
-                                        indicatorKey.includes('Ratio') || 
-                                        indicatorKey === 'taskCompletionRate';
-                  
                   return (
                     <div key={indicatorKey} className="flex justify-between items-center">
                       <span className="text-sm text-gray-700">{getIndicatorDisplayName(indicatorKey)}</span>
                       <div className="flex items-center">
-                        {isPercentage ? (
-                          // 百分比进度条
-                          <div className="w-32 bg-gray-200 rounded-full h-4 mr-2">
-                            <div 
-                              className="bg-blue-600 rounded-full h-4" 
-                              style={{ width: `${(indicatorValue as number * 20)}%` }}
-                            ></div>
-                          </div>
-                        ) : (
-                          // 星级评分
-                          <div className="flex">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <svg 
-                                key={star}
-                                className={`w-5 h-5 ${star <= (indicatorValue as number) ? 'text-yellow-400' : 'text-gray-300'}`}
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                              >
-                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                              </svg>
-                            ))}
-                          </div>
-                        )}
+                        {/* 星级评分 */}
+                        <div className="flex">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <svg 
+                              key={star}
+                              className={`w-5 h-5 ${star <= (indicatorValue as number) ? 'text-yellow-400' : 'text-gray-300'}`}
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          ))}
+                        </div>
                         <span className="ml-2 text-gray-900 font-medium">
-                          {(indicatorValue as number).toFixed(1)}
+                          {Number(indicatorValue as number).toFixed(1)}
                         </span>
                       </div>
                     </div>
@@ -352,12 +378,26 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
             <div className="h-64">
               <ResponsiveContainer width="100%" height="100%">
                 <RadarChart outerRadius="70%" data={radarData}>
-                  <PolarGrid />
-                  <PolarAngleAxis dataKey="subject" />
-                  <PolarRadiusAxis angle={30} domain={[0, 5]} />
-                  <Radar name="能力水平" dataKey="A" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
-                  <Tooltip />
-                  <Legend />
+                  <PolarGrid stroke="#e5e7eb" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#4b5563', fontSize: 12 }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 5]} tick={{ fill: '#6b7280' }} />
+                  <Radar 
+                    name="能力水平" 
+                    dataKey="A" 
+                    stroke="#8884d8" 
+                    fill="#8884d8" 
+                    fillOpacity={0.6} 
+                    isAnimationActive={false}
+                  />
+                  <Tooltip 
+                    formatter={(value) => [`${value} / 5.0`, '能力水平']} 
+                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                  />
+                  <Legend 
+                    iconType="circle" 
+                    iconSize={10}
+                    wrapperStyle={{ paddingTop: '10px' }}
+                  />
                 </RadarChart>
               </ResponsiveContainer>
             </div>
@@ -367,22 +407,65 @@ export default function StudentVisualizations({ student, assessment }: StudentVi
       
       {/* 评估趋势图 */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h3 className="font-semibold mb-4">学习能力趋势</h3>
+        <h3 className="font-semibold mb-4">学习能力趋势 {historyData.length > 1 ? `(最近${historyData.length}次评估)` : ''}</h3>
         <div className="h-64">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={historyData}
               margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              barGap={8}
+              barSize={16}
             >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis domain={[0, 5]} />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="learningAbility" name="学习能力" fill="#8884d8" />
-              <Bar dataKey="timeEfficiency" name="时间利用效率" fill="#82ca9d" />
-              <Bar dataKey="learningHabits" name="学习习惯" fill="#ffc658" />
-              <Bar dataKey="executionAbility" name="配合执行力" fill="#ff8042" />
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fill: '#4b5563', fontSize: 12 }}
+                axisLine={{ stroke: '#d1d5db' }}
+              />
+              <YAxis 
+                domain={[0, 5]} 
+                tick={{ fill: '#4b5563', fontSize: 12 }}
+                axisLine={{ stroke: '#d1d5db' }}
+                tickLine={{ stroke: '#d1d5db' }}
+              />
+              <Tooltip 
+                formatter={(value) => [`${value} / 5.0`]} 
+                contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                cursor={{ fill: 'rgba(224, 231, 255, 0.2)' }}
+              />
+              <Legend 
+                iconType="circle" 
+                iconSize={8}
+                wrapperStyle={{ paddingTop: '10px' }}
+              />
+              <Bar 
+                dataKey="learningAbility" 
+                name="学习能力" 
+                fill="#8884d8" 
+                radius={[4, 4, 0, 0]} 
+                isAnimationActive={false}
+              />
+              <Bar 
+                dataKey="timeEfficiency" 
+                name="时间利用效率" 
+                fill="#82ca9d" 
+                radius={[4, 4, 0, 0]} 
+                isAnimationActive={false}
+              />
+              <Bar 
+                dataKey="learningHabits" 
+                name="学习习惯" 
+                fill="#ffc658" 
+                radius={[4, 4, 0, 0]} 
+                isAnimationActive={false}
+              />
+              <Bar 
+                dataKey="executionAbility" 
+                name="配合执行力" 
+                fill="#ff8042" 
+                radius={[4, 4, 0, 0]} 
+                isAnimationActive={false}
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>
