@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import type { User } from '@supabase/supabase-js';
 
 export default function Home() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   
   useEffect(() => {
     async function checkAuth() {
