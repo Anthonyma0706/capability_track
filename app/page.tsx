@@ -1,18 +1,45 @@
+'use client';
+
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { createClient } from "@/utils/supabase/server";
-import { redirect } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
-export default async function Home() {
-  const supabase = await createClient();
+export default function Home() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
   
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        // 动态导入Supabase客户端
+        const { createClient } = await import("@/utils/supabase/client");
+        const supabase = createClient();
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        // 如果用户已登录，重定向到受保护页面
+        if (user) {
+          router.push("/protected");
+        } else {
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("认证检查失败:", error);
+        setIsLoading(false);
+      }
+    }
+    
+    checkAuth();
+  }, [router]);
   
-  // 如果用户已登录，重定向到受保护页面
-  if (user) {
-    redirect("/protected");
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
   }
   
   return (
@@ -37,7 +64,7 @@ export default async function Home() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
-                  <Link href="/student_profile">
+                  <Link href="/student_profile?example=true">
                     浏览示例
                   </Link>
                 </Button>
