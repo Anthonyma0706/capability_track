@@ -37,7 +37,7 @@ export default async function Home() {
                   </Link>
                 </Button>
                 <Button asChild variant="outline" size="lg">
-                  <Link href="/student_profile">
+                  <Link href="/student_profile?example=true">
                     浏览示例
                   </Link>
                 </Button>
