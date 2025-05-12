@@ -160,13 +160,20 @@ const StudentProfileContent = () => {
     const studentIndex = students.findIndex(s => s.id === student.id);
     
     if (studentIndex >= 0) {
-      // 如果是更新现有评估
-      const assessmentIndex = student.assessments.findIndex(a => a.id === savedAssessment.id);
+      // 获取当前评估的日期 (YYYY-MM-DD 格式)
+      const currentDate = new Date(savedAssessment.date).toISOString().split('T')[0];
+      
+      // 查找该日期的评估记录
+      const assessmentIndex = students[studentIndex].assessments.findIndex(a => {
+        const existingDate = new Date(a.date).toISOString().split('T')[0];
+        return existingDate === currentDate;
+      });
       
       if (assessmentIndex >= 0) {
+        // 更新现有评估
         students[studentIndex].assessments[assessmentIndex] = savedAssessment;
       } else {
-        // 如果是新评估
+        // 添加新评估
         students[studentIndex].assessments.push(savedAssessment);
       }
       

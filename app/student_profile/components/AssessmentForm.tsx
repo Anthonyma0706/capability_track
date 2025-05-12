@@ -109,26 +109,74 @@ export default function AssessmentForm({
     
     const updatedStudent = { ...students[studentIndex] };
     
-    // 更新评估日期
+    // 准备要保存的评估数据
     const updatedAssessment = {
       ...assessment,
       date: new Date(assessmentDate).toISOString()
     };
     
+    // 获取当前评估的日期 (YYYY-MM-DD 格式)
+    const currentDate = new Date(assessmentDate).toISOString().split('T')[0];
+    
+    // 查找该日期是否已有评估记录
+    const existingAssessmentOnSameDate = updatedStudent.assessments.find(a => {
+      const existingDate = new Date(a.date).toISOString().split('T')[0];
+      return existingDate === currentDate;
+    });
+    
+    // 查找当前正在编辑的评估在数组中的索引（如果存在）
+    let currentAssessmentIndex = -1;
     if (existingAssessment) {
-      // 更新现有评估
-      const assessmentIndex = updatedStudent.assessments.findIndex(
-        a => a.id === existingAssessment.id
-      );
-      
-      if (assessmentIndex !== -1) {
-        updatedStudent.assessments[assessmentIndex] = updatedAssessment;
-      }
-    } else {
-      // 添加新评估
-      updatedStudent.assessments.push(updatedAssessment);
+      currentAssessmentIndex = updatedStudent.assessments.findIndex(a => a.id === existingAssessment.id);
     }
     
+    // 处理评估保存逻辑
+    if (existingAssessmentOnSameDate) {
+      // 该日期已有评估记录
+      
+      // 如果当前编辑的就是该日期的评估，直接更新
+      if (existingAssessment && existingAssessmentOnSameDate.id === existingAssessment.id) {
+        if (currentAssessmentIndex !== -1) {
+          updatedStudent.assessments[currentAssessmentIndex] = updatedAssessment;
+        }
+      } else {
+        // 如果当前编辑的是其他日期的评估，但改成了已有评估的日期
+        // 1. 删除当前编辑的评估（如果存在）
+        if (existingAssessment && currentAssessmentIndex !== -1) {
+          updatedStudent.assessments.splice(currentAssessmentIndex, 1);
+        }
+        
+        // 2. 更新该日期的已有评估
+        const sameDataAssessmentIndex = updatedStudent.assessments.findIndex(
+          a => a.id === existingAssessmentOnSameDate.id
+        );
+        
+        if (sameDataAssessmentIndex !== -1) {
+          // 合并评估数据，保留原ID
+          updatedStudent.assessments[sameDataAssessmentIndex] = {
+            ...updatedAssessment,
+            id: existingAssessmentOnSameDate.id
+          };
+          
+          // 更新引用，以便后续使用
+          updatedAssessment.id = existingAssessmentOnSameDate.id;
+        }
+      }
+    } else {
+      // 该日期没有评估记录
+      
+      if (existingAssessment) {
+        // 如果是编辑现有评估，直接更新
+        if (currentAssessmentIndex !== -1) {
+          updatedStudent.assessments[currentAssessmentIndex] = updatedAssessment;
+        }
+      } else {
+        // 如果是新建评估，添加到列表
+        updatedStudent.assessments.push(updatedAssessment);
+      }
+    }
+    
+    // 保存更新后的学生数据
     students[studentIndex] = updatedStudent;
     saveStudentsToStorage(students);
     
@@ -140,7 +188,13 @@ export default function AssessmentForm({
       setShowSaveSuccess(false);
     }, 3000);
     
-    onAssessmentSaved(student, updatedAssessment);
+    // 找到最终保存的评估记录
+    const finalAssessment = updatedStudent.assessments.find(a => {
+      const aDate = new Date(a.date).toISOString().split('T')[0];
+      return aDate === currentDate;
+    });
+    
+    onAssessmentSaved(student, finalAssessment || updatedAssessment);
   };
 
   // 处理日期变更
