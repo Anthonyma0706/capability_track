@@ -6,10 +6,11 @@ import { getStudentsFromStorage, saveStudentsToStorage, generateId, createEmptyA
 import StudentList from './components/StudentList';
 import AssessmentForm from './components/AssessmentForm';
 import StudentVisualizations from './components/StudentVisualizations';
-import { createClient } from "@/utils/supabase/client";
 import { useRouter } from 'next/navigation';
+import dynamic from 'next/dynamic';
 
-export default function StudentProfilePage() {
+// 客户端组件，用于避免服务器端渲染时的Supabase错误
+const StudentProfileContent = () => {
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedAssessment, setSelectedAssessment] = useState<Assessment | null>(null);
   const [isCreatingAssessment, setIsCreatingAssessment] = useState<boolean>(false);
@@ -18,9 +19,8 @@ export default function StudentProfilePage() {
   const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
   const [isExampleMode, setIsExampleMode] = useState<boolean>(false);
   const router = useRouter();
-  const supabase = createClient();
-
-  // 检查是否为示例模式或已登录用户
+  
+  // 仅在客户端导入和使用Supabase
   useEffect(() => {
     async function checkAuth() {
       // 检查URL中是否包含example参数
@@ -33,6 +33,10 @@ export default function StudentProfilePage() {
         return;
       }
       
+      // 仅在客户端导入Supabase
+      const { createClient } = await import('@/utils/supabase/client');
+      const supabase = createClient();
+      
       // 如果不是示例模式，则检查是否已登录
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -44,7 +48,7 @@ export default function StudentProfilePage() {
     }
     
     checkAuth();
-  }, [router, supabase.auth]);
+  }, [router]);
 
   // 如果正在检查认证状态，显示加载状态
   if (isCheckingAuth) {
@@ -54,7 +58,7 @@ export default function StudentProfilePage() {
       </div>
     );
   }
-
+  
   // 选择学生的回调
   const handleSelectStudent = (student: Student) => {
     setSelectedStudent(student);
@@ -403,4 +407,9 @@ export default function StudentProfilePage() {
       </div>
     </div>
   );
+};
+
+// 使用动态导入避免服务器端渲染
+export default function StudentProfilePage() {
+  return <StudentProfileContent />;
 } 
