@@ -1,19 +1,47 @@
+'use client';
+
 import FetchDataSteps from "@/components/tutorial/fetch-data-steps";
-import { createClient } from "@/utils/supabase/server";
 import { InfoIcon } from "lucide-react";
-import { redirect } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default async function ProtectedPage() {
-  const supabase = await createClient();
+export default function ProtectedPage() {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        // 动态导入Supabase客户端
+        const { createClient } = await import("@/utils/supabase/client");
+        const supabase = createClient();
+        
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+          router.push("/sign-in");
+        } else {
+          setUser(user);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("认证检查失败:", error);
+        router.push("/sign-in");
+      }
+    }
+    
+    checkAuth();
+  }, [router]);
 
-  if (!user) {
-    return redirect("/sign-in");
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
   return (
